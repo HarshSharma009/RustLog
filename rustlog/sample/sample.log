@@ -1,0 +1,4 @@
+INFO: Starting server
+ERROR: Failed to connect
+DEBUG: Retrying connection
+ERROR: Timeout

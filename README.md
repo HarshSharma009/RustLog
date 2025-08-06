@@ -49,8 +49,11 @@ rustlog/
 │   ├── main.rs       # CLI entrypoint
 │   ├── args.rs       # CLI arguments with `clap`
 │   ├── reader.rs     # File reading logic
-│   └── filter.rs     # Keyword filtering
-├── Cargo.toml        # Project manifest
+│   ├── filter.rs     # Keyword filtering
+├── tests/
+│   ├── filter_tests.rs
+│   └── cli_tests.rs
+├── Cargo.toml
 └── README.md
 ```
 ---
@@ -75,11 +78,11 @@ rustlog/
 ### 🧠 Learning Outcomes
 This project is part of a full roadmap to learn Rust like a pro:
 
--Ownership, Borrowing, Lifetimes
--Modular architecture
--Concurrency and async
--Real-world crates and ecosystems
--Extensibility patterns
+- Ownership, Borrowing, Lifetimes
+- Modular architecture
+- Concurrency and async
+- Real-world crates and ecosystems
+- Extensibility patterns
 
 ---
 ## 🤝 Contributing

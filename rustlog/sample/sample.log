@@ -2,7 +2,3 @@ INFO: Starting server
 ERROR: Failed to connect
 DEBUG: Retrying connection
 ERROR: Timeout
-ERROR: disk full
-ERROR: disk full
-ERROR: disk full
-INFO: disk full

@@ -15,7 +15,9 @@ A blazing fast CLI log filtering tool built in Rust — read `.log` files and ex
 ## 🚀 Usage
 
 ```bash
-cargo run -- sample.log ERROR
+$ cargo run -- ./sample/sample.log ERROR
+```
+---
 
 ## 📦 Tech Stack
 - Rust

@@ -1,54 +1,73 @@
 mod filter;
 mod reader;
+mod reader_async;
 mod args;
-use anyhow::Result;
-use std::sync::mpsc;
-use std::thread;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
+use anyhow::Result;
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use tokio::sync::mpsc;
+use tokio::signal;
 
 // This file is part of RustLog, a simple CLI log filtering tool.
 // It reads log files and filters lines based on a keyword.
-fn main() -> Result<()> {
-    env_logger::init(); // <--- initialize logging
+#[tokio::main]
+async fn main() -> Result<()> {
+    env_logger::init();
     let args = args::parse_args();
-    log::info!("Args: {:?}", args);
-    if args.tail {
-        // If tailing is enabled, start a thread to read the file continuously
-        let (tx, rx) = mpsc::channel();
-        let file_path = args.file_path.clone();
+    log::info!("Starting RustLog with args: {:?}", args);
 
-        // Set up a signal handler to gracefully shut down the tailing
+    if args.tail {
+        log::info!("Tail mode activated. Monitoring file: {:?}", args.file_path);
+        let (tx, mut rx) = mpsc::channel(100);
+        let file_path = args.file_path.clone();
+        let keyword = args.keyword.clone();
+
         let running = Arc::new(AtomicBool::new(true));
         let r = running.clone();
-        // Use ctrlc to handle Ctrl+C
-        // This will allow us to stop the tailing thread when Ctrl+C is pressed
-        log::info!("Press Ctrl+C to stop tailing...");
-        ctrlc::set_handler(move || {
-            r.store(false, Ordering::SeqCst);
-            log::info!("Shutting down gracefully...");
-        })?;
-        let r = running.clone();
 
-        // Spawn a thread to tail the file
-        thread::spawn(move || {
-            reader::tail_file(&file_path, tx, r).expect("Tailing failed");
+        // Handle Ctrl+C for graceful shutdown
+        tokio::spawn(async move {
+            if let Err(e) = signal::ctrl_c().await {
+                log::error!("Failed to install Ctrl+C handler: {}", e);
+                return;
+            }
+            log::warn!("Received Ctrl+C. Initiating shutdown...");
+            r.store(false, Ordering::SeqCst);
         });
 
-        // Main thread reads from the channel
-        for line in rx {
-            if line.contains(&args.keyword) {
+        // Spawn async tailing task
+        let r = running.clone();
+        tokio::spawn(async move {
+            log::debug!("Starting tailing task...");
+            if let Err(e) = reader_async::tail_file_async(file_path, tx, r).await {
+                log::error!("Tailing failed: {}", e);
+            }
+        });
+
+        // Main async loop reading from the channel
+        while let Some(line) = rx.recv().await {
+            if line.contains(&keyword) {
                 log::info!("Filtered: {}", line);
+            } else {
+                log::debug!("Ignored: {}", line);
             }
         }
+        log::info!("Tailing ended. Exiting.");
     } else {
-        // Normal mode (non-tail)
-        let lines = reader::read_lines(&args.file_path)?;
-        let filtered = filter::filter_lines(lines, &args.keyword);
-        for line in filtered {
-            log::info!("Filtered: {}", line);
+        log::info!("Non-tail mode. Reading full file: {:?}", args.file_path);
+        match reader::read_lines(&args.file_path) {
+            Ok(lines) => {
+                let filtered = filter::filter_lines(lines, &args.keyword);
+                for line in filtered {
+                    log::info!("Filtered: {}", line);
+                }
+            },
+            Err(e) => {
+                log::error!("Failed to read file: {}", e);
+            }
         }
     }
 
+    log::info!("RustLog finished execution.");
     Ok(())
 }

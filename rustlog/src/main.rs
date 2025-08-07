@@ -7,17 +7,30 @@ use anyhow::Result;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use tokio::sync::mpsc;
 use tokio::signal;
+use tracing_subscriber::{EnvFilter, fmt};
 
-// This file is part of RustLog, a simple CLI log filtering tool.
-// It reads log files and filters lines based on a keyword.
+fn init_tracing() {
+    let subscriber = fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_target(false)
+        .with_level(true)
+        .with_thread_names(true)
+        .with_file(true)
+        .with_line_number(true)
+        .compact() // Use .json() here for structured logs in production
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::init();
+    init_tracing();
     let args = args::parse_args();
-    log::info!("Starting RustLog with args: {:?}", args);
+    tracing::info!(?args, "Starting RustLog");
 
     if args.tail {
-        log::info!("Tail mode activated. Monitoring file: {:?}", args.file_path);
+        tracing::info!(file = %std::path::Path::new(&args.file_path).display(), "Tail mode activated");
         let (tx, mut rx) = mpsc::channel(100);
         let file_path = args.file_path.clone();
         let keyword = args.keyword.clone();
@@ -25,49 +38,38 @@ async fn main() -> Result<()> {
         let running = Arc::new(AtomicBool::new(true));
         let r = running.clone();
 
-        // Handle Ctrl+C for graceful shutdown
         tokio::spawn(async move {
-            if let Err(e) = signal::ctrl_c().await {
-                log::error!("Failed to install Ctrl+C handler: {}", e);
-                return;
-            }
-            log::warn!("Received Ctrl+C. Initiating shutdown...");
+            signal::ctrl_c().await.expect("Failed to install Ctrl+C handler");
+            tracing::info!("Shutting down gracefully...");
             r.store(false, Ordering::SeqCst);
         });
 
-        // Spawn async tailing task
         let r = running.clone();
         tokio::spawn(async move {
-            log::debug!("Starting tailing task...");
             if let Err(e) = reader_async::tail_file_async(file_path, tx, r).await {
-                log::error!("Tailing failed: {}", e);
+                tracing::error!(error = %e, "Tailing failed");
             }
         });
 
-        // Main async loop reading from the channel
         while let Some(line) = rx.recv().await {
             if line.contains(&keyword) {
-                log::info!("Filtered: {}", line);
-            } else {
-                log::debug!("Ignored: {}", line);
+                tracing::info!(target: "filtered", %line);
             }
         }
-        log::info!("Tailing ended. Exiting.");
     } else {
-        log::info!("Non-tail mode. Reading full file: {:?}", args.file_path);
+        tracing::info!(file = %std::path::Path::new(&args.file_path).display(), "Non-tail mode: Reading file");
         match reader::read_lines(&args.file_path) {
             Ok(lines) => {
                 let filtered = filter::filter_lines(lines, &args.keyword);
                 for line in filtered {
-                    log::info!("Filtered: {}", line);
+                    tracing::info!(target: "filtered", %line);
                 }
             },
             Err(e) => {
-                log::error!("Failed to read file: {}", e);
+                tracing::error!(error = %e, "Failed to read file");
             }
         }
     }
 
-    log::info!("RustLog finished execution.");
     Ok(())
 }

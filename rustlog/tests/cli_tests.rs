@@ -1,6 +1,7 @@
 use assert_cmd::Command;
 use std::fs::write;
 use tempfile::NamedTempFile;
+use predicates::str::contains;
 
 #[test]
 fn shows_filtered_log_output() {
@@ -13,8 +14,8 @@ fn shows_filtered_log_output() {
     let mut cmd = Command::cargo_bin("rustlog").unwrap();
     cmd.arg(file.path())
         .arg("ERROR")
-        .env("RUST_LOG", "info") // <-- Add this line
+        .env("RUST_LOG", "info")
         .assert()
         .success()
-        .stderr(predicates::str::contains("ERROR: something went wrong"));
+        .stdout(contains("ERROR: something went wrong"));
 }

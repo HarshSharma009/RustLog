@@ -1,4 +1,6 @@
-INFO: Starting server
-ERROR: Failed to connect
-DEBUG: Retrying connection
-ERROR: Timeout
+2024-08-08 12:00:00 INFO Application started
+2024-08-08 12:00:01 WARN Low disk space
+2024-08-08 12:00:02 ERROR Failed to open file
+2024-08-08 12:00:03 DEBUG Debugging something
+2024-08-08 12:00:04 TRACE Tracing something
+2024-08-08 12:00:05 ERROR Something went wrong
